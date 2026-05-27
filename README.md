@@ -138,7 +138,6 @@
 
     <!-- 幽默標題 -->
     <div class="text-center mb-10 mt-4 select-none">
-        <!-- 變更：將標題與符號都稍微調大了一點點 (text-4xl md:text-6xl lg:text-7xl -> text-5xl md:text-7xl lg:text-8xl 之間做微調) -->
         <h1 class="text-5xl md:text-6xl lg:text-7xl font-black mb-2 flex flex-wrap items-center justify-center gap-3 md:gap-5">
             <span class="emoji-active text-5xl md:text-7xl lg:text-8xl">🎯</span>
             <span class="title-poster-style px-5 py-2">命運的輪盤</span>
@@ -150,7 +149,7 @@
     </div>
 
     <!-- 顯示名字的區域 -->
-    <div id="nameDisplayContainer" class="w-full max-w-2xl bg-white rounded-3xl p-8 md:p-16 mb-10 name-box flex items-center justify-center min-h-[250px] border-4 border-yellow-400 relative overflow-hidden">
+    <div id="nameDisplayContainer" class="w-full max-w-2xl bg-white rounded-3xl p-8 md:p-16 mb-10 name-box flex flex-col items-center justify-center min-h-[250px] border-4 border-yellow-400 relative overflow-hidden">
         <!-- 裝飾用背景文字 -->
         <div class="absolute inset-0 opacity-5 flex items-center justify-center text-9xl font-black select-none pointer-events-none">
             ?
@@ -172,15 +171,18 @@
     </p>
 
     <script>
-        // 名單資料
+        // 名單資料 (已剔除：陳玟心、陳清如、巫品佳、陳映、林佑穎)
         const names = [
-            "林佑穎", "嚴培心", "邱語真", "吳廷蔚", "李書驊", "馮焱玲", "郭芊妤", "許華珍", 
-            "黃翊庭", "洪藝書", "陳清如", "巫品佳", "林祐亘", "溫芸玄", "劉峻羽", "楊于萱", 
-            "鄧伊婷", "林雨蒨", "潘芊妤", "王俐捷", "陳是寧", "莊捷涵", "陳楷薇", "陳玟心", 
-            "林品亨", "劉家槥", "邱凡純", "陳綮曜", "李銘杰", "黃阡瑜", "林沛涵", "蘇佑丞", 
-            "蘇佑葳", "黃芷嫻", "李依倫", "葉芊惠", "謝秀慧", "何詠貽", "陳韋仲", "楊弘运", 
-            "陳映", "吳柔葳", "林文婷"
+            "嚴培心", "邱語真", "吳廷蔚", "李書驊", "馮焱玲", "郭芊妤", "許華珍", 
+            "黃翊庭", "洪藝書", "林祐亘", "溫芸玄", "劉峻羽", "楊于萱", "鄧伊婷", 
+            "林雨蒨", "潘芊妤", "王俐捷", "陳是寧", "莊捷涵", "陳楷薇", "林品亨", 
+            "劉家槥", "邱凡純", "陳綮曜", "李銘杰", "黃阡瑜", "林沛涵", "蘇佑丞", 
+            "蘇佑葳", "黃芷嫻", "李依倫", "葉芊惠", "謝秀慧", "何詠貽", "陳韋仲", 
+            "楊弘运", "吳柔葳", "林文婷"
         ];
+
+        // 剩餘的可抽名單池 (不重複抽籤機制)
+        let pool = [...names];
 
         // 幽默台詞
         const funnyQuotes = [
@@ -227,40 +229,56 @@
         // --- 音效系統 (使用 Web Audio API 原生合成) ---
         let audioCtx;
 
+        // 同步初始化函數，杜絕任何非同步所造成的事件連結遺失
         function initAudio() {
-            if (!audioCtx) {
-                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            }
-            if (audioCtx.state === 'suspended') {
-                audioCtx.resume();
+            try {
+                if (!audioCtx) {
+                    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+                if (audioCtx && audioCtx.state === 'suspended') {
+                    audioCtx.resume();
+                }
+            } catch (e) {
+                console.warn("音訊上下文初始化失敗:", e);
             }
         }
 
         // 抽籤時的快速跳動音效
         function playBeep() {
             if (!audioCtx) return;
+            
+            // 自動修復被暫停的狀態
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+            
+            const now = audioCtx.currentTime;
             const osc = audioCtx.createOscillator();
             const gainNode = audioCtx.createGain();
             
             osc.type = 'triangle';
-            osc.frequency.setValueAtTime(800, audioCtx.currentTime);
-            osc.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + 0.05);
+            osc.frequency.setValueAtTime(800, now);
+            osc.frequency.exponentialRampToValueAtTime(100, now + 0.05);
             
-            gainNode.gain.setValueAtTime(0.5, audioCtx.currentTime);
-            gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.05);
+            gainNode.gain.setValueAtTime(0.5, now);
+            gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
             
             osc.connect(gainNode);
             gainNode.connect(audioCtx.destination);
             
-            osc.start();
-            osc.stop(audioCtx.currentTime + 0.05);
+            osc.start(now);
+            osc.stop(now + 0.05);
         }
 
         // 勝利/中獎的登登登登音效
         function playWinSound() {
             if (!audioCtx) return;
             
-            const startTime = audioCtx.currentTime;
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+            
+            const now = audioCtx.currentTime;
             const chord = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
             
             chord.forEach((freq, i) => {
@@ -268,43 +286,58 @@
                 const gain = audioCtx.createGain();
                 
                 osc.type = (i % 2 === 0) ? 'square' : 'sawtooth';
-                osc.frequency.setValueAtTime(freq, startTime + i * 0.1);
+                osc.frequency.setValueAtTime(freq, now + i * 0.1);
                 
-                gain.gain.setValueAtTime(0, startTime + i * 0.1);
-                gain.gain.linearRampToValueAtTime(0.4, startTime + i * 0.1 + 0.05);
+                gain.gain.setValueAtTime(0, now + i * 0.1);
+                gain.gain.linearRampToValueAtTime(0.4, now + i * 0.1 + 0.05);
                 
                 osc.connect(gain);
                 gain.connect(audioCtx.destination);
-                osc.start(startTime + i * 0.1);
+                osc.start(now + i * 0.1);
                 
                 if (i === chord.length - 1) {
-                    gain.gain.linearRampToValueAtTime(0.6, startTime + i * 0.1 + 0.1);
-                    gain.gain.exponentialRampToValueAtTime(0.001, startTime + i * 0.1 + 2.5);
-                    osc.stop(startTime + i * 0.1 + 2.5);
+                    gain.gain.linearRampToValueAtTime(0.6, now + i * 0.1 + 0.1);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.1 + 2.5);
+                    osc.stop(now + i * 0.1 + 2.5);
                     
                     // 重低音襯底
                     const bassOsc = audioCtx.createOscillator();
                     const bassGain = audioCtx.createGain();
                     bassOsc.type = 'square';
-                    bassOsc.frequency.setValueAtTime(261.63, startTime + i * 0.1);
-                    bassGain.gain.setValueAtTime(0, startTime + i * 0.1);
-                    bassGain.gain.linearRampToValueAtTime(0.5, startTime + i * 0.1 + 0.1);
-                    bassGain.gain.exponentialRampToValueAtTime(0.001, startTime + i * 0.1 + 2.5);
+                    bassOsc.frequency.setValueAtTime(261.63, now + i * 0.1);
+                    bassGain.gain.setValueAtTime(0, now + i * 0.1);
+                    bassGain.gain.linearRampToValueAtTime(0.5, now + i * 0.1 + 0.1);
+                    bassGain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.1 + 2.5);
                     bassOsc.connect(bassGain);
                     bassGain.connect(audioCtx.destination);
-                    bassOsc.start(startTime + i * 0.1);
-                    bassOsc.stop(startTime + i * 0.1 + 2.5);
+                    bassOsc.start(now + i * 0.1);
+                    bassOsc.stop(now + i * 0.1 + 2.5);
                 } else {
-                    gain.gain.exponentialRampToValueAtTime(0.001, startTime + i * 0.1 + 0.2);
-                    osc.stop(startTime + i * 0.1 + 0.2);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.1 + 0.2);
+                    osc.stop(now + i * 0.1 + 0.2);
                 }
             });
         }
 
+        // 默默重置抽籤名單池的函數 (在背景執行，不干擾使用者)
+        function silentResetPool() {
+            pool = [...names];
+        }
+
+        // 100% 同步按鈕點擊觸發，直接擊破瀏覽器的音效限制
         function startDraw() {
             if (isDrawing) return;
             
+            // 1. 同步、即時解鎖 Web Audio 權限！(絕對不經過 async/await 微任務打斷)
             initAudio();
+            
+            // 2. 立即嘗試同步播放第一聲 Beep 聲
+            playBeep();
+
+            // 檢查名單是否已抽完，若抽完了則默默自動重置
+            if (pool.length === 0) {
+                silentResetPool();
+            }
             
             isDrawing = true;
             drawBtn.innerText = "😵 命運轉盤狂飆中... 😵";
@@ -317,9 +350,9 @@
             nameDisplay.classList.add('text-red-600');
             nameDisplayContainer.classList.add('shake');
 
-            // 瘋狂洗牌特效 + 播放音效
+            // 瘋狂洗牌特效 (只在剩餘的名單 pool 裡面跑亂數，確保不會閃到已被過濾的人)
             drawInterval = setInterval(() => {
-                const randomName = names[Math.floor(Math.random() * names.length)];
+                const randomName = pool[Math.floor(Math.random() * pool.length)];
                 nameDisplay.innerText = randomName;
                 
                 const colors = ['#EF4444', '#3B82F6', '#10B981', '#F59E0B', '#8B5CF6'];
@@ -337,13 +370,22 @@
         function stopDraw() {
             clearInterval(drawInterval);
             
-            const finalWinner = names[Math.floor(Math.random() * names.length)];
+            // 從不重複名單池中抽出並移除一人
+            const randomIndex = Math.floor(Math.random() * pool.length);
+            const finalWinner = pool.splice(randomIndex, 1)[0];
+
             const randomQuote = funnyQuotes[Math.floor(Math.random() * funnyQuotes.length)];
             
             nameDisplay.innerText = finalWinner;
             nameDisplay.style.color = '';
             nameDisplay.classList.add('text-purple-600');
-            subtitle.innerText = randomQuote;
+            
+            // 如果剛好全部抽完，在下一次抽之前先貼心提示
+            if (pool.length === 0) {
+                subtitle.innerText = `🎉 恭喜壓軸的 ${finalWinner}！名單也剛好功成身退，下一次點擊將自動開啟新的一輪！👏`;
+            } else {
+                subtitle.innerText = randomQuote;
+            }
             
             nameDisplayContainer.classList.remove('shake');
             
